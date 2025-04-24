@@ -1,4 +1,4 @@
-fullnameOverride: {{ .Controller.FullnameOverride }}
+fullnameOverride: {{ .FullnameOverride }}
 commonLabels: {}
 controller:
   addHeaders: {}
@@ -102,7 +102,7 @@ controller:
   disableLeaderElection: false
   dnsConfig: {}
   dnsPolicy: ClusterFirst
-  electionID: {{ .Controller.FullnameOverride }}
+  electionID: {{ .FullnameOverride }}
   electionTTL: ''
   enableAnnotationValidations: true
   enableMimalloc: true
@@ -125,7 +125,7 @@ controller:
       https: 443
   hostname: {}
   image:
-    repository: {{ .Controller.Repository }}
+    repository: {{ .Controller.Image.Repository }}
     allowPrivilegeEscalation: false
     chroot: false
     digest: sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b
@@ -139,7 +139,7 @@ controller:
     seccompProfile:
       type: RuntimeDefault
     tag: v1.12.1
-  ingressClass: {{ .Controller.FullnameOverride }}
+  ingressClass: {{ .FullnameOverride }}
   ingressClassByName: false
   ingressClassResource:
     aliases: []
@@ -147,14 +147,14 @@ controller:
     controllerValue: k8s.io/ingress-nginx
     default: false
     enabled: true
-    name: {{ .Controller.FullnameOverride }}
+    name: {{ .FullnameOverride }}
     parameters: {}
   integrateKubeSphere:
     scope:
       enabled: false
       namespace: ''
       namespaceSelector: ''
-    tracing: {{ index .Deployment.Annotations "servicemesh.kubesphere.io/enabled" }}
+    tracing: {{ index .Controller.IntegrateKubeSphere.Tracing }}
   keda:
     apiVersion: keda.sh/v1alpha1
     behavior: {}
@@ -226,7 +226,7 @@ controller:
   progressDeadlineSeconds: 0
   proxySetHeaders: {}
   publishService:
-    enabled: {{ eq .Service.Type "LoadBalancer" }}
+    enabled: {{ eq .Controller.Service.Type "LoadBalancer" }}
     pathOverride: ''
   readinessProbe:
     failureThreshold: 3
@@ -270,13 +270,8 @@ controller:
       loadBalancerIP: ''
       loadBalancerSourceRanges: []
       nodePorts:
-        {{- if eq .Service.Type "NodePort" }}
-        http: {{ index .Service.HttpNodeport" }}
-        https: {{ index .Service.HttpsNodeport" }}
-        {{- else }}
-        http: {}
-        https: {}
-        {{- end }}
+        http: ''
+        https: ''
         tcp: {}
         udp: {}
       ports: {}
@@ -291,8 +286,13 @@ controller:
     loadBalancerIP: ''
     loadBalancerSourceRanges: []
     nodePorts:
+      {{- if eq .Controller.Service.Type "NodePort" }}
+      http: {{ .Controller.Service.NodePorts.Http }}
+      https: {{ .Controller.Service.NodePorts.Https }}
+      {{- else }}
       http: ''
       https: ''
+      {{- end }}
       tcp: {}
       udp: {}
     ports:
@@ -309,7 +309,7 @@ controller:
     annotations: {}
     configMapNamespace: ''
   terminationGracePeriodSeconds: 300
-  tolerations: {{ toYaml .Deployment.Tolerations | nindent 4 }}
+  tolerations: []
   topologySpreadConstraints: []
   udp:
     annotations: {}
@@ -318,7 +318,7 @@ controller:
   updateStrategy: {}
   watchIngressWithoutClass: false
 defaultBackend:
-  affinity: {{ toYaml .Deployment.Affinity | nindent 4 }}
+  affinity: []
   autoscaling:
     annotations: {}
     enabled: false
@@ -369,10 +369,10 @@ defaultBackend:
     periodSeconds: 5
     successThreshold: 1
     timeoutSeconds: 5
-  replicaCount: {{ .Deployment.Replicas }}
-  resources: {{ toYaml .Deployment.Resources | nindent 4 }}
+  replicaCount: {{ .Controller.ReplicaCount }}
+  resources: {{ toYaml .Controller.Resources | nindent 4 }}
   service:
-    annotations: {{ toYaml .Service.Annotations | nindent 6 }}
+    annotations: {{ toYaml .Controller.Service.Annotations | nindent 6 }}
     externalIPs: []
     loadBalancerSourceRanges: []
     servicePort: 80
