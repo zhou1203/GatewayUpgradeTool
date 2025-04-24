@@ -1,37 +1,27 @@
-package main
+package runner
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	gatewayv2alpha1 "github.com/zhou1203/GatewayUpgrader/api/gateway/v2alpha1"
-	"github.com/zhou1203/GatewayUpgrader/pkg/simple/helmwrapper"
-	"github.com/zhou1203/GatewayUpgrader/pkg/template"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/zhou1203/GatewayUpgrader/cmd/upgrade/options"
+
+	gatewayv2alpha1 "github.com/zhou1203/GatewayUpgrader/api/gateway/v2alpha1"
+	"github.com/zhou1203/GatewayUpgrader/pkg/scheme"
+	"github.com/zhou1203/GatewayUpgrader/pkg/simple/helmwrapper"
+	"github.com/zhou1203/GatewayUpgrader/pkg/template"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/zhou1203/GatewayUpgrader/pkg/scheme"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// 封装参数的结构体
-type UpgradeRunOptions struct {
-	Kubeconfig    string
-	GatewayNames  string
-	AppVersion    string
-	TemplateFile  string
-	TargetVersion string
-}
 
 type Runner struct {
 	Client        client.Client
@@ -42,59 +32,19 @@ type Runner struct {
 	KubeConfig    string
 }
 
-func main() {
-	opts := parseFlags()
+func NewRunner(options *options.RunOptions) (*Runner, error) {
+	r := &Runner{}
 
-	runner, err := NewRunner(opts)
-	if err != nil {
-		klog.Fatal(err)
-		return
-	}
-	runner.Run(signals.SetupSignalHandler())
-}
-
-func NewRunner(options *UpgradeRunOptions) (*Runner, error) {
-	runner := &Runner{}
-
-	kubeClient, err := buildKubeClient(options.Kubeconfig)
+	kubeClient, err := buildClient(options.KubeConfig)
 	if err != nil {
 		return nil, err
 	}
-	runner.Client = kubeClient
-	runner.AppVersion = options.AppVersion
-	runner.TargetVersion = options.TargetVersion
-	runner.TemplateFile = options.TemplateFile
-	runner.GatewayNames = strings.Split(options.GatewayNames, ",")
-	return runner, nil
-}
-
-func parseFlags() *UpgradeRunOptions {
-	opts := &UpgradeRunOptions{}
-
-	flag.StringVar(&opts.Kubeconfig, "kubeconfig", ".kube/config", "Path to the kubeconfig file ")
-	flag.StringVar(&opts.GatewayNames, "gateways", "", "Comma-separated list of gateway names to upgrade")
-	flag.StringVar(&opts.AppVersion, "app-version", "", "App version")
-	flag.StringVar(&opts.TargetVersion, "target-version", "", "Target version")
-	flag.StringVar(&opts.TemplateFile, "template-file", "/etc/values.yaml", "Template file")
-	flag.Parse()
-
-	return opts
-}
-
-// 构建 Kubernetes 客户端
-func buildKubeClient(kubeconfig string) (client.Client, error) {
-	var config *rest.Config
-	var err error
-	if kubeconfig == "" {
-		config, err = rest.InClusterConfig()
-	} else {
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return client.New(config, client.Options{Scheme: scheme.Scheme})
+	r.Client = kubeClient
+	r.AppVersion = options.AppVersion
+	r.TargetVersion = options.TargetVersion
+	r.TemplateFile = options.TemplateFile
+	r.GatewayNames = strings.Split(options.GatewayNames, ",")
+	return r, nil
 }
 
 func (r *Runner) Run(ctx context.Context) {
@@ -145,10 +95,11 @@ func (r *Runner) CheckAndCompleteGateways(ctx context.Context) error {
 				return err
 			}
 			if r.AppVersion != "" && gw.Spec.AppVersion != r.AppVersion {
-				klog.Warning("invalid gateway spec: app version does not match, will skip it")
+				klog.Warningf("invalid gateway %s: app version does not match, will skip it", fullName)
 				continue
 			} else if gw.Spec.AppVersion == r.TargetVersion {
-				klog.Warning("invalid gateway, gateway version is already is, will skip it")
+				klog.Warningf("invalid gateway %s, no need to upgrade, will skip it", fullName)
+				continue
 			}
 			r.GatewayNames = append(r.GatewayNames, fullName)
 		}
@@ -225,4 +176,19 @@ func (r *Runner) upgradeGateway(ctx context.Context, fullName string) error {
 	}
 
 	return nil
+}
+
+func buildClient(kubeconfig string) (client.Client, error) {
+	var config *rest.Config
+	var err error
+	if kubeconfig == "" {
+		config, err = rest.InClusterConfig()
+	} else {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return client.New(config, client.Options{Scheme: scheme.Scheme})
 }
