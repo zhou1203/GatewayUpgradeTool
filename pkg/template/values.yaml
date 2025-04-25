@@ -154,7 +154,7 @@ controller:
       enabled: false
       namespace: ''
       namespaceSelector: ''
-    tracing: {{ index .Controller.IntegrateKubeSphere.Tracing }}
+    tracing: {{ .Controller.IntegrateKubeSphere.Tracing }}
   keda:
     apiVersion: keda.sh/v1alpha1
     behavior: {}
@@ -238,19 +238,15 @@ controller:
     periodSeconds: 10
     successThreshold: 1
     timeoutSeconds: 1
-  replicaCount: 1
+  replicaCount: {{ .Controller.ReplicaCount }}
   reportNodeInternalIp: false
-  resources: {}
+  resources: {{ toYaml .Controller.Resources | nindent 4 }}
   scope:
     enabled: false
     namespace: ''
     namespaceSelector: ''
   service:
-    {{- if .Controller.Service.Annotations }}
     annotations: {{ toYaml .Controller.Service.Annotations | nindent 6 }}
-    {{- else }}
-    annotations: {}
-    {{- end }}
     appProtocol: true
     clusterIP: ''
     enableHttp: true
@@ -306,7 +302,7 @@ controller:
     targetPorts:
       http: http
       https: https
-    type: NodePort
+    type: {{ .Controller.Service.Type }}
   shareProcessNamespace: false
   sysctls: {}
   tcp:
@@ -373,8 +369,8 @@ defaultBackend:
     periodSeconds: 5
     successThreshold: 1
     timeoutSeconds: 5
-  replicaCount: {{ .Controller.ReplicaCount }}
-  resources: {{ toYaml .Controller.Resources | nindent 4 }}
+  replicaCount: 1
+  resources: {}
   service:
     annotations: {}
     externalIPs: []

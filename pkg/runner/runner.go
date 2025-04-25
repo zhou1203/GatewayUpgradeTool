@@ -157,7 +157,7 @@ func (r *Runner) upgradeGateway(ctx context.Context, fullName string) error {
 	}
 
 	waitReleaseFunc := func() error {
-		time.Sleep(10 * time.Second)
+		time.Sleep(5 * time.Second)
 		wrapper := helmwrapper.NewHelmWrapper(r.KubeConfig, namespace, name)
 		ready, err := wrapper.IsReleaseReady(5 * time.Minute)
 		if err != nil {
