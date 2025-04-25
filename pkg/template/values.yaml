@@ -246,7 +246,11 @@ controller:
     namespace: ''
     namespaceSelector: ''
   service:
+    {{- if .Controller.Service.Annotations }}
+    annotations: {{ toYaml .Controller.Service.Annotations | nindent 6 }}
+    {{- else }}
     annotations: {}
+    {{- end }}
     appProtocol: true
     clusterIP: ''
     enableHttp: true
@@ -372,7 +376,7 @@ defaultBackend:
   replicaCount: {{ .Controller.ReplicaCount }}
   resources: {{ toYaml .Controller.Resources | nindent 4 }}
   service:
-    annotations: {{ toYaml .Controller.Service.Annotations | nindent 6 }}
+    annotations: {}
     externalIPs: []
     loadBalancerSourceRanges: []
     servicePort: 80
@@ -401,5 +405,5 @@ serviceAccount:
   automountServiceAccountToken: true
   create: true
   name: ''
-tcp: {{ toYaml .Controller.TCP | nindent 2 }}
-udp: {{ toYaml .Controller.UDP | nindent 2 }}
+tcp: {}
+udp: {}

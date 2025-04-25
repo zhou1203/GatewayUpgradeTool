@@ -10,6 +10,7 @@ import (
 
 func main() {
 	opts := options.ParseFlags()
+
 	newRunner, err := runner.NewRunner(opts)
 	if err != nil {
 		klog.Fatalf("failed to parse flags, %v", err)

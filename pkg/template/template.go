@@ -2,11 +2,14 @@ package template
 
 import (
 	"bytes"
+	"embed"
 	"encoding/json"
-	"gopkg.in/yaml.v3"
-	"k8s.io/klog/v2"
+	"fmt"
 	"strings"
 	"text/template"
+
+	"gopkg.in/yaml.v3"
+	"k8s.io/klog/v2"
 
 	gatewayv2alpha1 "github.com/zhou1203/GatewayUpgrader/api/gateway/v2alpha1"
 )
@@ -15,6 +18,9 @@ const (
 	AnnotationsNodePortHttp  = "gateway.kubesphere.io/nodeport-http"
 	AnnotationsNodePortHttps = "gateway.kubesphere.io/nodeport-https"
 )
+
+//go:embed values.yaml
+var fs embed.FS
 
 type GatewayTemplate struct {
 	FullnameOverride string `yaml:"fullnameOverride"`
@@ -28,8 +34,6 @@ type Controller struct {
 	Annotations         map[string]string `yaml:"annotations,omitempty"`
 	Config              map[string]string `yaml:"config,omitempty"`
 	Scope               Scope             `yaml:"scope,omitempty"`
-	TCP                 map[string]any    `yaml:"tcp,omitempty"`
-	UDP                 map[string]any    `yaml:"udp,omitempty"`
 	Service             Service           `yaml:"service,omitempty"`
 	Resources           Resource          `yaml:"resources,omitempty"`
 	IntegrateKubeSphere Integrate         `yaml:"integrateKubeSphere,omitempty"`
@@ -64,7 +68,7 @@ type NodePorts struct {
 	Https string `yaml:"https,omitempty"`
 }
 
-func TemplateHandler(gw *gatewayv2alpha1.Gateway, filePath string) ([]byte, error) {
+func TemplateHandler(gw *gatewayv2alpha1.Gateway) ([]byte, error) {
 	tmplName := "values.yaml"
 
 	gatewaySpec, err := fromGatewayValues(gw.Spec.Values.Raw)
@@ -79,7 +83,7 @@ func TemplateHandler(gw *gatewayv2alpha1.Gateway, filePath string) ([]byte, erro
 	tmpl, err := template.New(tmplName).Funcs(template.FuncMap{
 		"toYaml":  toYaml,
 		"nindent": nindent,
-	}).ParseFiles(filePath)
+	}).ParseFS(fs, tmplName)
 	if err != nil {
 		klog.Errorf("failed to parse template: %v", err)
 		return nil, err
@@ -91,13 +95,15 @@ func TemplateHandler(gw *gatewayv2alpha1.Gateway, filePath string) ([]byte, erro
 		return nil, err
 	}
 
-	values := map[string]any{}
+	var values interface{}
+	klog.Infoln(string(buf.Bytes()))
 	if err := yaml.Unmarshal(buf.Bytes(), &values); err != nil {
 		klog.Errorf("failed to unmarshal: %v", err)
 		return nil, err
 	}
-
-	jsonBytes, err := json.Marshal(values)
+	values = convert(values)
+	jsonBytes, err := json.MarshalIndent(values, "", "  ")
+	klog.Infoln(string(jsonBytes))
 	if err != nil {
 		klog.Errorf("failed to marshal: %v", err)
 		return nil, err
@@ -145,4 +151,20 @@ func fromGatewayValues(values []byte) (*GatewayTemplate, error) {
 		return nil, err
 	}
 	return t, nil
+}
+
+func convert(v interface{}) interface{} {
+	switch v := v.(type) {
+	case map[interface{}]interface{}:
+		m := make(map[string]interface{})
+		for key, value := range v {
+			m[fmt.Sprint(key)] = convert(value)
+		}
+		return m
+	case []interface{}:
+		for i, value := range v {
+			v[i] = convert(value)
+		}
+	}
+	return v
 }

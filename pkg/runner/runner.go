@@ -2,11 +2,18 @@ package runner
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/zhou1203/GatewayUpgrader/cmd/upgrade/options"
 
@@ -23,13 +30,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	TargetVersion = "kubesphere-nginx-ingress-4.12.1"
+)
+
 type Runner struct {
-	Client        client.Client
-	GatewayNames  []string
-	AppVersion    string
-	TargetVersion string
-	TemplateFile  string
-	KubeConfig    string
+	Client       client.Client
+	GatewayNames []string
+	AppVersion   string
+	KubeConfig   string
 }
 
 func NewRunner(options *options.RunOptions) (*Runner, error) {
@@ -41,8 +50,6 @@ func NewRunner(options *options.RunOptions) (*Runner, error) {
 	}
 	r.Client = kubeClient
 	r.AppVersion = options.AppVersion
-	r.TargetVersion = options.TargetVersion
-	r.TemplateFile = options.TemplateFile
 	r.GatewayNames = strings.Split(options.GatewayNames, ",")
 	return r, nil
 }
@@ -73,7 +80,7 @@ func (r *Runner) CheckAndCompleteGateways(ctx context.Context) error {
 			return err
 		}
 		for _, gw := range list.Items {
-			if gw.Spec.AppVersion == r.TargetVersion {
+			if gw.Spec.AppVersion != TargetVersion {
 				r.GatewayNames = append(r.GatewayNames, gw.Name)
 			}
 		}
@@ -97,10 +104,10 @@ func (r *Runner) CheckAndCompleteGateways(ctx context.Context) error {
 			if r.AppVersion != "" && gw.Spec.AppVersion != r.AppVersion {
 				klog.Warningf("invalid gateway %s: app version does not match, will skip it", fullName)
 				continue
-			} else if gw.Spec.AppVersion == r.TargetVersion {
-				klog.Warningf("invalid gateway %s, no need to upgrade, will skip it", fullName)
-				continue
-			}
+			} //else if gw.Spec.AppVersion == TargetVersion {
+			//	klog.Warningf("invalid gateway %s, no need to upgrade, will skip it", fullName)
+			//	continue
+			//}
 			r.GatewayNames = append(r.GatewayNames, fullName)
 		}
 	}
@@ -138,12 +145,19 @@ func (r *Runner) upgradeGateway(ctx context.Context, fullName string) error {
 		}
 	}
 
-	jsonBytes, err := template.TemplateHandler(old, r.TemplateFile)
+	err = r.createBackup(ctx, old)
+	if err != nil {
+		return err
+	}
+	klog.Infof("Successfully backup gateway '%s'", fullName)
+
+	jsonBytes, err := template.TemplateHandler(old)
 	if err != nil {
 		return err
 	}
 
 	waitReleaseFunc := func() error {
+		time.Sleep(10 * time.Second)
 		wrapper := helmwrapper.NewHelmWrapper(r.KubeConfig, namespace, name)
 		ready, err := wrapper.IsReleaseReady(5 * time.Minute)
 		if err != nil {
@@ -156,17 +170,9 @@ func (r *Runner) upgradeGateway(ctx context.Context, fullName string) error {
 	}
 
 	deepCopy := old.DeepCopy()
-	deepCopy.Spec.AppVersion = r.TargetVersion
+	deepCopy.Spec.AppVersion = TargetVersion
 	deepCopy.Spec.Values = runtime.RawExtension{Raw: jsonBytes}
-	err = r.Client.Delete(ctx, old)
-	if err != nil {
-		return err
-	}
-	err = waitReleaseFunc()
-	if err != nil {
-		return err
-	}
-	err = r.Client.Create(ctx, deepCopy)
+	err = r.Client.Update(ctx, deepCopy)
 	if err != nil {
 		return err
 	}
@@ -191,4 +197,37 @@ func buildClient(kubeconfig string) (client.Client, error) {
 	}
 
 	return client.New(config, client.Options{Scheme: scheme.Scheme})
+}
+
+func (r *Runner) createBackup(ctx context.Context, gw *gatewayv2alpha1.Gateway) error {
+	marshal, err := yaml.Marshal(gw)
+	if err != nil {
+		return err
+	}
+	cmKey := fmt.Sprintf("%s-%s", gw.GetName(), "backup")
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cmKey,
+			Namespace: gw.Namespace,
+		},
+	}
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
+		backupTimestamp := "backup-" + strconv.Itoa(int(time.Now().UTC().Unix()))
+		if cm.Data == nil {
+			cm.Data = map[string]string{}
+		}
+		if len(cm.Data) >= 2 {
+			keys := make([]string, 0, len(cm.Data))
+			for k := range cm.Data {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			delete(cm.Data, keys[0])
+		}
+		encode := make([]byte, base64.StdEncoding.EncodedLen(len(marshal)))
+		base64.StdEncoding.Encode(encode, marshal)
+		cm.Data[backupTimestamp] = string(encode)
+		return nil
+	})
+	return err
 }
