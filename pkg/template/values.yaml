@@ -78,7 +78,7 @@ controller:
       type: ClusterIP
   affinity: {}
   allowSnippetAnnotations: false
-  annotations: {}
+  annotations: {{ toYaml .Controller.Annotations | nindent 4 }}
   autoscaling:
     annotations: {}
     behavior: {}
@@ -144,16 +144,16 @@ controller:
   ingressClassResource:
     aliases: []
     annotations: {}
-    controllerValue: k8s.io/ingress-nginx
+    controllerValue: k8s.io/{{ .FullnameOverride }}
     default: false
     enabled: true
     name: {{ .FullnameOverride }}
     parameters: {}
   integrateKubeSphere:
     scope:
-      enabled: false
-      namespace: ''
-      namespaceSelector: ''
+      enabled: {{ .Controller.IntegrateKubeSphere.Scope.Enabled }}
+      namespace: {{ .Controller.IntegrateKubeSphere.Scope.Namespace }}
+      namespaceSelector: {{ toYaml .Controller.IntegrateKubeSphere.Scpoe.NamespaceSelector | nindent 8 }}
     tracing: {{ .Controller.IntegrateKubeSphere.Tracing }}
   keda:
     apiVersion: keda.sh/v1alpha1

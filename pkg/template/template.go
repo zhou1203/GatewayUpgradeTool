@@ -33,14 +33,14 @@ type Controller struct {
 	ReplicaCount        int               `yaml:"replicaCount,omitempty"`
 	Annotations         map[string]string `yaml:"annotations,omitempty"`
 	Config              map[string]string `yaml:"config,omitempty"`
-	Scope               Scope             `yaml:"scope,omitempty"`
 	Service             Service           `yaml:"service,omitempty"`
 	Resources           Resource          `yaml:"resources,omitempty"`
 	IntegrateKubeSphere Integrate         `yaml:"integrateKubeSphere,omitempty"`
 }
 
 type Integrate struct {
-	Tracing bool `yaml:"tracing,omitempty"`
+	Tracing bool  `yaml:"tracing,omitempty"`
+	Scope   Scope `yaml:"scope,omitempty"`
 }
 
 type Resource struct {
@@ -53,9 +53,9 @@ type Image struct {
 }
 
 type Scope struct {
-	Enabled           bool   `json:"enabled,omitempty"`
-	Namespace         string `json:"namespace,omitempty"`
-	NamespaceSelector string `json:"namespaceSelector,omitempty"`
+	Enabled           bool              `json:"enabled,omitempty"`
+	Namespace         string            `json:"namespace,omitempty"`
+	NamespaceSelector map[string]string `json:"namespaceSelector,omitempty"`
 }
 type Service struct {
 	Annotations map[string]string `yaml:"annotations,omitempty"`
