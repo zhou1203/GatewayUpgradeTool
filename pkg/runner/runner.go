@@ -2,25 +2,21 @@ package runner
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"github.com/zhou1203/GatewayUpgradeTool/cmd/gatewayupgradetool/options"
+	"sigs.k8s.io/yaml"
 
-	"gopkg.in/yaml.v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/zhou1203/GatewayUpgrader/cmd/upgrade/options"
-
-	gatewayv2alpha1 "github.com/zhou1203/GatewayUpgrader/api/gateway/v2alpha1"
-	"github.com/zhou1203/GatewayUpgrader/pkg/scheme"
-	"github.com/zhou1203/GatewayUpgrader/pkg/simple/helmwrapper"
-	"github.com/zhou1203/GatewayUpgrader/pkg/template"
+	gatewayv2alpha1 "github.com/zhou1203/GatewayUpgradeTool/api/gateway/v2alpha1"
+	"github.com/zhou1203/GatewayUpgradeTool/pkg/scheme"
+	"github.com/zhou1203/GatewayUpgradeTool/pkg/simple/helmwrapper"
+	"github.com/zhou1203/GatewayUpgradeTool/pkg/template"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,11 +35,20 @@ type Runner struct {
 	GatewayNames []string
 	AppVersion   string
 	KubeConfig   string
+
+	NeedBackup bool
+	BackupDir  string
 }
 
 func NewRunner(options *options.RunOptions) (*Runner, error) {
 	r := &Runner{}
-
+	if options.KubeConfig == "" {
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			return nil, err
+		}
+		options.KubeConfig = config.String()
+	}
 	kubeClient, err := buildClient(options.KubeConfig)
 	if err != nil {
 		return nil, err
@@ -51,23 +56,59 @@ func NewRunner(options *options.RunOptions) (*Runner, error) {
 	r.Client = kubeClient
 	r.AppVersion = options.AppVersion
 	r.GatewayNames = strings.Split(options.GatewayNames, ",")
+	r.NeedBackup = options.NeedBackup
+	r.BackupDir = options.BackupDir
 	return r, nil
 }
 
 func (r *Runner) Run(ctx context.Context) {
 	err := r.CheckAndCompleteGateways(ctx)
 	if err != nil {
-		klog.Error("failed to check gateways", err)
+		klog.Fatal("failed to check gateways", err)
 		return
 	}
-	for _, fullName := range r.GatewayNames {
-		err := r.upgradeGateway(ctx, fullName)
+
+	gateways, err := r.getGateways(ctx)
+	if err != nil {
+		klog.Fatal("failed to get gateways", err)
+		return
+	}
+
+	if r.NeedBackup {
+		err := r.CreateBackup(gateways)
 		if err != nil {
-			klog.Errorf("Failed to upgrade gateway '%s': %v", fullName, err)
+			klog.Fatal("failed to create backup", err)
 			return
 		}
-		klog.Infof("Successfully upgrade gateway '%s'", fullName)
 	}
+
+	err = r.UpgradeGateways(ctx, gateways)
+	if err != nil {
+		klog.Fatal("failed to upgrade gateways", err)
+		return
+	}
+
+}
+
+func (r *Runner) getGateways(ctx context.Context) ([]gatewayv2alpha1.Gateway, error) {
+	var list []gatewayv2alpha1.Gateway
+	for _, fullName := range r.GatewayNames {
+		split := strings.Split(fullName, ":")
+		if len(split) != 2 {
+			return nil, fmt.Errorf("invalid gateway name: %s", fullName)
+		}
+		namespace := split[0]
+		name := split[1]
+		gateway := &gatewayv2alpha1.Gateway{}
+		err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, gateway)
+		if err != nil {
+			return nil, err
+		}
+		gateway.Kind = "Gateway"
+		gateway.APIVersion = gatewayv2alpha1.SchemeGroupVersion.String()
+		list = append(list, *gateway)
+	}
+	return list, nil
 }
 
 func (r *Runner) CheckAndCompleteGateways(ctx context.Context) error {
@@ -81,7 +122,7 @@ func (r *Runner) CheckAndCompleteGateways(ctx context.Context) error {
 		}
 		for _, gw := range list.Items {
 			if gw.Spec.AppVersion != TargetVersion {
-				r.GatewayNames = append(r.GatewayNames, gw.Name)
+				r.GatewayNames = append(r.GatewayNames, fmt.Sprintf("%s:%s", gw.Namespace, gw.Name))
 			}
 		}
 	} else {
@@ -104,30 +145,26 @@ func (r *Runner) CheckAndCompleteGateways(ctx context.Context) error {
 			if r.AppVersion != "" && gw.Spec.AppVersion != r.AppVersion {
 				klog.Warningf("invalid gateway %s: app version does not match, will skip it", fullName)
 				continue
-			} //else if gw.Spec.AppVersion == TargetVersion {
-			//	klog.Warningf("invalid gateway %s, no need to upgrade, will skip it", fullName)
-			//	continue
-			//}
+			}
 			r.GatewayNames = append(r.GatewayNames, fullName)
 		}
 	}
 	return nil
 }
 
-func (r *Runner) upgradeGateway(ctx context.Context, fullName string) error {
-	split := strings.Split(fullName, ":")
-	if len(split) != 2 {
-		return fmt.Errorf("invalid gateway name: %s", fullName)
+func (r *Runner) UpgradeGateways(ctx context.Context, gateways []gatewayv2alpha1.Gateway) error {
+	for _, gw := range gateways {
+		err := r.upgrade(ctx, gw)
+		if err != nil {
+			return fmt.Errorf("failed to upgrade gateway %s: %v", gw.Name, err)
+		}
 	}
-	namespace := split[0]
-	name := split[1]
-	old := &gatewayv2alpha1.Gateway{}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, old)
-	if err != nil {
-		return err
-	}
+	return nil
+}
+
+func (r *Runner) upgrade(ctx context.Context, old gatewayv2alpha1.Gateway) error {
 	service := &corev1.Service{}
-	err = r.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, service)
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: old.Namespace, Name: old.Name}, service)
 	if err != nil {
 		return err
 	}
@@ -145,26 +182,20 @@ func (r *Runner) upgradeGateway(ctx context.Context, fullName string) error {
 		}
 	}
 
-	err = r.createBackup(ctx, old)
-	if err != nil {
-		return err
-	}
-	klog.Infof("Successfully backup gateway '%s'", fullName)
-
-	jsonBytes, err := template.TemplateHandler(old)
+	jsonBytes, err := template.TemplateHandler(&old)
 	if err != nil {
 		return err
 	}
 
 	waitReleaseFunc := func() error {
 		time.Sleep(5 * time.Second)
-		wrapper := helmwrapper.NewHelmWrapper(r.KubeConfig, namespace, name)
+		wrapper := helmwrapper.NewHelmWrapper(r.KubeConfig, old.Namespace, old.Name)
 		ready, err := wrapper.IsReleaseReady(5 * time.Minute)
 		if err != nil {
 			return err
 		}
 		if !ready {
-			return fmt.Errorf("gateway %s is not ready, wait for release timeout", fullName)
+			return fmt.Errorf("gateway '%s:%s' is not ready, wait for release timeout", old.Namespace, old.Name)
 		}
 		return nil
 	}
@@ -199,35 +230,35 @@ func buildClient(kubeconfig string) (client.Client, error) {
 	return client.New(config, client.Options{Scheme: scheme.Scheme})
 }
 
-func (r *Runner) createBackup(ctx context.Context, gw *gatewayv2alpha1.Gateway) error {
-	marshal, err := yaml.Marshal(gw)
+func (r *Runner) CreateBackup(gateways []gatewayv2alpha1.Gateway) error {
+
+	fullPath := filepath.Join(r.BackupDir, fmt.Sprintf("gateway-backup-%s.yaml", time.Now().Format("20060102150405")))
+
+	err := os.MkdirAll(r.BackupDir, 0755)
 	if err != nil {
 		return err
 	}
-	cmKey := fmt.Sprintf("%s-%s", gw.GetName(), "backup")
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cmKey,
-			Namespace: gw.Namespace,
-		},
+	file, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
 	}
-	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
-		backupTimestamp := "backup-" + strconv.Itoa(int(time.Now().UTC().Unix()))
-		if cm.Data == nil {
-			cm.Data = map[string]string{}
+
+	defer file.Close()
+
+	for _, gateway := range gateways {
+		marshal, err := yaml.Marshal(gateway)
+		if err != nil {
+			return err
 		}
-		if len(cm.Data) >= 2 {
-			keys := make([]string, 0, len(cm.Data))
-			for k := range cm.Data {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			delete(cm.Data, keys[0])
+		_, err = file.Write(marshal)
+		if err != nil {
+			return err
 		}
-		encode := make([]byte, base64.StdEncoding.EncodedLen(len(marshal)))
-		base64.StdEncoding.Encode(encode, marshal)
-		cm.Data[backupTimestamp] = string(encode)
-		return nil
-	})
-	return err
+		_, err = file.WriteString("\n---\n")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

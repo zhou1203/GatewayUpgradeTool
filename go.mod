@@ -1,4 +1,4 @@
-module github.com/zhou1203/GatewayUpgrader
+module github.com/zhou1203/GatewayUpgradeTool
 
 go 1.24.0
 

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/zhou1203/GatewayUpgrader/cmd/upgrade/options"
+	"github.com/zhou1203/GatewayUpgradeTool/cmd/gatewayupgradetool/options"
 
-	"github.com/zhou1203/GatewayUpgrader/pkg/runner"
+	"github.com/zhou1203/GatewayUpgradeTool/pkg/runner"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )

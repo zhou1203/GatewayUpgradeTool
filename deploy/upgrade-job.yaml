@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gateway-upgrade-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gateway-upgrade-job
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: upgrade-tool
+          image: wenhaozhou/gateway-upgrade-tool:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--gateways=gw-a,gw-b"
+          volumeMounts:
+            - name: backup-volume
+              mountPath: /mnt/backup
+      serviceAccountName: gateway
+      volumes:
+        - name: backup-volume
+          persistentVolumeClaim:
+            claimName: gateway-upgrade-pvc

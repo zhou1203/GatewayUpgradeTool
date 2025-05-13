@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/zhou1203/GatewayUpgrader/cmd/upgrade/options"
+	"github.com/zhou1203/GatewayUpgradeTool/cmd/gatewayupgradetool/options"
 
 	"github.com/spf13/viper"
 )
