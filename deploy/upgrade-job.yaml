@@ -23,7 +23,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: upgrade-tool
-          image: wenhaozhou/gateway-upgrade-tool:0514-2
+          image: wenhaozhou/gateway-upgrade-tool:v0.0.1
           imagePullPolicy: IfNotPresent
           args:
             - "--gateways=*"

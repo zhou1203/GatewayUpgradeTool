@@ -3,8 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
-	v1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,20 +11,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zhou1203/GatewayUpgradeTool/cmd/gatewayupgradetool/options"
-	"sigs.k8s.io/yaml"
-
 	gatewayv2alpha1 "github.com/zhou1203/GatewayUpgradeTool/api/gateway/v2alpha1"
+	"github.com/zhou1203/GatewayUpgradeTool/cmd/gatewayupgradetool/options"
 	"github.com/zhou1203/GatewayUpgradeTool/pkg/scheme"
 	"github.com/zhou1203/GatewayUpgradeTool/pkg/simple/helmwrapper"
 	"github.com/zhou1203/GatewayUpgradeTool/pkg/template"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -82,17 +82,15 @@ func (r *Runner) Run(ctx context.Context) {
 		gatewayFullNames = append(gatewayFullNames, fullName)
 	}
 
-	klog.Info("start to upgrade gateways", "gateways", gatewayFullNames)
-
 	if r.NeedBackup {
-		klog.Info("start to backup gateways", "gateways", gatewayFullNames)
+		klog.Info("Start to backup gateways. gateways: ", gatewayFullNames)
 		err := r.CreateBackup(gateways)
 		if err != nil {
 			klog.Fatal("failed to create backup", err)
 			return
 		}
 	}
-
+	klog.Info("Start to upgrade gateways. gateways: ", gatewayFullNames)
 	err = r.UpgradeGateways(ctx, gateways)
 	if err != nil {
 		klog.Fatal("failed to upgrade gateways", err)
@@ -154,7 +152,7 @@ func (r *Runner) CheckAndCompleteGateways(ctx context.Context) error {
 				return err
 			}
 			if r.AppVersion != "" && gw.Spec.AppVersion != r.AppVersion {
-				klog.Warningf("invalid gateway %s: app version does not match, will skip it", fullName)
+				klog.Warningf("Invalid gateway %s: app version does not match, will skip it", fullName)
 				continue
 			}
 			r.GatewayNames = append(r.GatewayNames, fullName)
@@ -169,7 +167,7 @@ func (r *Runner) UpgradeGateways(ctx context.Context, gateways []gatewayv2alpha1
 		if err != nil {
 			return fmt.Errorf("failed to upgrade gateway %s: %v", gw.Name, err)
 		}
-		klog.Infof("upgrade gateway %s:%s successfully", gw.Namespace, gw.Name)
+		klog.Infof("Upgrade gateway successfully, gateway: %s/%s", gw.Namespace, gw.Name)
 	}
 	return nil
 }
@@ -274,7 +272,7 @@ func (r *Runner) CreateBackup(gateways []gatewayv2alpha1.Gateway) error {
 		if err != nil {
 			return err
 		}
-		klog.Info("Backup gateway successfully", "gateway", fmt.Sprintf(gateway.Name))
+		klog.Info("Backup gateway successfully. gateway: ", fmt.Sprintf(gateway.Name))
 	}
 
 	return nil
