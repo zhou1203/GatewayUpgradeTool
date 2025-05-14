@@ -3,6 +3,8 @@ package runner
 import (
 	"context"
 	"fmt"
+	v1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
 	"path/filepath"
 	"slices"
@@ -42,19 +44,19 @@ type Runner struct {
 
 func NewRunner(options *options.RunOptions) (*Runner, error) {
 	r := &Runner{}
-	if options.KubeConfig == "" {
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			return nil, err
-		}
-		options.KubeConfig = config.String()
-	}
 	kubeClient, err := buildClient(options.KubeConfig)
 	if err != nil {
 		return nil, err
 	}
 	r.Client = kubeClient
 	r.AppVersion = options.AppVersion
+	if options.KubeConfig != "" {
+		restConfig, err := clientcmd.BuildConfigFromFlags("", options.KubeConfig)
+		if err != nil {
+			return nil, err
+		}
+		r.KubeConfig = restConfig.String()
+	}
 	r.GatewayNames = strings.Split(options.GatewayNames, ",")
 	r.NeedBackup = options.NeedBackup
 	r.BackupDir = options.BackupDir
@@ -74,7 +76,16 @@ func (r *Runner) Run(ctx context.Context) {
 		return
 	}
 
+	gatewayFullNames := make([]string, 0, len(gateways))
+	for _, g := range gateways {
+		fullName := fmt.Sprintf("%s/%s", g.Namespace, g.Name)
+		gatewayFullNames = append(gatewayFullNames, fullName)
+	}
+
+	klog.Info("start to upgrade gateways", "gateways", gatewayFullNames)
+
 	if r.NeedBackup {
+		klog.Info("start to backup gateways", "gateways", gatewayFullNames)
 		err := r.CreateBackup(gateways)
 		if err != nil {
 			klog.Fatal("failed to create backup", err)
@@ -158,6 +169,7 @@ func (r *Runner) UpgradeGateways(ctx context.Context, gateways []gatewayv2alpha1
 		if err != nil {
 			return fmt.Errorf("failed to upgrade gateway %s: %v", gw.Name, err)
 		}
+		klog.Infof("upgrade gateway %s:%s successfully", gw.Namespace, gw.Name)
 	}
 	return nil
 }
@@ -182,7 +194,7 @@ func (r *Runner) upgrade(ctx context.Context, old gatewayv2alpha1.Gateway) error
 		}
 	}
 
-	jsonBytes, err := template.TemplateHandler(&old)
+	jsonBytes, err := template.HandleTemplate(&old)
 	if err != nil {
 		return err
 	}
@@ -203,6 +215,10 @@ func (r *Runner) upgrade(ctx context.Context, old gatewayv2alpha1.Gateway) error
 	deepCopy := old.DeepCopy()
 	deepCopy.Spec.AppVersion = TargetVersion
 	deepCopy.Spec.Values = runtime.RawExtension{Raw: jsonBytes}
+	err = r.Client.Delete(ctx, &v1.IngressClass{ObjectMeta: metav1.ObjectMeta{Name: old.Name}})
+	if err != nil {
+		return err
+	}
 	err = r.Client.Update(ctx, deepCopy)
 	if err != nil {
 		return err
@@ -258,6 +274,7 @@ func (r *Runner) CreateBackup(gateways []gatewayv2alpha1.Gateway) error {
 		if err != nil {
 			return err
 		}
+		klog.Info("Backup gateway successfully", "gateway", fmt.Sprintf(gateway.Name))
 	}
 
 	return nil

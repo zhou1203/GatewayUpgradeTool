@@ -53,9 +53,9 @@ type Image struct {
 }
 
 type Scope struct {
-	Enabled           bool              `json:"enabled,omitempty"`
-	Namespace         string            `json:"namespace,omitempty"`
-	NamespaceSelector map[string]string `json:"namespaceSelector,omitempty"`
+	Enabled           bool   `yaml:"enabled,omitempty"`
+	Namespace         string `yaml:"namespace,omitempty"`
+	NamespaceSelector string `yaml:"namespaceSelector,omitempty"`
 }
 type Service struct {
 	Annotations map[string]string `yaml:"annotations,omitempty"`
@@ -68,7 +68,7 @@ type NodePorts struct {
 	Https string `yaml:"https,omitempty"`
 }
 
-func TemplateHandler(gw *gatewayv2alpha1.Gateway) ([]byte, error) {
+func HandleTemplate(gw *gatewayv2alpha1.Gateway) ([]byte, error) {
 	tmplName := "values.yaml"
 
 	gatewaySpec, err := fromGatewayValues(gw.Spec.Values.Raw)
@@ -96,14 +96,12 @@ func TemplateHandler(gw *gatewayv2alpha1.Gateway) ([]byte, error) {
 	}
 
 	var values interface{}
-	klog.Infoln(string(buf.Bytes()))
 	if err := yaml.Unmarshal(buf.Bytes(), &values); err != nil {
 		klog.Errorf("failed to unmarshal: %v", err)
 		return nil, err
 	}
 	values = convert(values)
 	jsonBytes, err := json.MarshalIndent(values, "", "  ")
-	klog.Infoln(string(jsonBytes))
 	if err != nil {
 		klog.Errorf("failed to marshal: %v", err)
 		return nil, err

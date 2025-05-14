@@ -153,7 +153,7 @@ controller:
     scope:
       enabled: {{ .Controller.IntegrateKubeSphere.Scope.Enabled }}
       namespace: {{ .Controller.IntegrateKubeSphere.Scope.Namespace }}
-      namespaceSelector: {{ toYaml .Controller.IntegrateKubeSphere.Scpoe.NamespaceSelector | nindent 8 }}
+      namespaceSelector: {{ .Controller.IntegrateKubeSphere.Scope.NamespaceSelector }}
     tracing: {{ .Controller.IntegrateKubeSphere.Tracing }}
   keda:
     apiVersion: keda.sh/v1alpha1
