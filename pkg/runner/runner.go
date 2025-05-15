@@ -163,11 +163,12 @@ func (r *Runner) CheckAndCompleteGateways(ctx context.Context) error {
 
 func (r *Runner) UpgradeGateways(ctx context.Context, gateways []gatewayv2alpha1.Gateway) error {
 	for _, gw := range gateways {
+		klog.Infof("Begin to Upgrade gateway %s/%s.", gw.Namespace, gw.Name)
 		err := r.upgrade(ctx, gw)
 		if err != nil {
 			return fmt.Errorf("failed to upgrade gateway %s: %v", gw.Name, err)
 		}
-		klog.Infof("Upgrade gateway successfully, gateway: %s/%s", gw.Namespace, gw.Name)
+		klog.Infof("Upgrade gateway %s/%s successfully.", gw.Namespace, gw.Name)
 	}
 	return nil
 }
@@ -205,7 +206,7 @@ func (r *Runner) upgrade(ctx context.Context, old gatewayv2alpha1.Gateway) error
 			return err
 		}
 		if !ready {
-			return fmt.Errorf("gateway '%s:%s' is not ready, wait for release timeout", old.Namespace, old.Name)
+			return fmt.Errorf("gateway '%s/%s' is not ready, wait for release timeout", old.Namespace, old.Name)
 		}
 		return nil
 	}
@@ -213,10 +214,22 @@ func (r *Runner) upgrade(ctx context.Context, old gatewayv2alpha1.Gateway) error
 	deepCopy := old.DeepCopy()
 	deepCopy.Spec.AppVersion = TargetVersion
 	deepCopy.Spec.Values = runtime.RawExtension{Raw: jsonBytes}
-	err = r.Client.Delete(ctx, &v1.IngressClass{ObjectMeta: metav1.ObjectMeta{Name: old.Name}})
+
+	ingressClassList := &v1.IngressClassList{}
+	err = r.Client.List(ctx, ingressClassList, client.MatchingLabels{"app.kubernetes.io/instance": old.Name})
 	if err != nil {
 		return err
 	}
+	if len(ingressClassList.Items) == 0 {
+		return fmt.Errorf("get gateway: %s ingressClass failed, please check it", old.Name)
+	}
+	oldIngressClassName := ingressClassList.Items[0].Name
+
+	err = r.Client.Delete(ctx, &v1.IngressClass{ObjectMeta: metav1.ObjectMeta{Name: oldIngressClassName}})
+	if err != nil {
+		return err
+	}
+	klog.Infof("Delete old ingress class %s successfully.", oldIngressClassName)
 	err = r.Client.Update(ctx, deepCopy)
 	if err != nil {
 		return err
@@ -225,6 +238,7 @@ func (r *Runner) upgrade(ctx context.Context, old gatewayv2alpha1.Gateway) error
 	if err != nil {
 		return err
 	}
+	klog.Infof("Update gateway CR successfully, gateway: %s/%s", old.Namespace, old.Name)
 
 	return nil
 }
