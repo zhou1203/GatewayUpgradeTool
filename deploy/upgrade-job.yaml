@@ -26,6 +26,7 @@ spec:
           image: wenhaozhou/gateway-upgrade-tool:v0.0.1
           imagePullPolicy: Always
           args:
+            - "upgrade"
             - "--gateways=*"
             - "--need-backup=true"
           volumeMounts:
