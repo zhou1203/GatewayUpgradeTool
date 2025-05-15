@@ -139,15 +139,15 @@ controller:
     seccompProfile:
       type: RuntimeDefault
     tag: v1.12.1
-  ingressClass: {{ .FullnameOverride }}
+  ingressClass: {{ .Controller.IngressClassResource.Name }}
   ingressClassByName: false
   ingressClassResource:
     aliases: []
     annotations: {}
-    controllerValue: k8s.io/{{ .FullnameOverride }}
+    controllerValue: k8s.io/{{ .Controller.IngressClassResource.Name }}
     default: false
     enabled: true
-    name: {{ .FullnameOverride }}
+    name: {{ .Controller.IngressClassResource.Name }}
     parameters: {}
   integrateKubeSphere:
     scope:

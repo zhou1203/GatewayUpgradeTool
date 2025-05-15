@@ -51,11 +51,11 @@ func NewRunner(options *options.RunOptions) (*Runner, error) {
 	r.Client = kubeClient
 	r.AppVersion = options.AppVersion
 	if options.KubeConfig != "" {
-		restConfig, err := clientcmd.BuildConfigFromFlags("", options.KubeConfig)
+		file, err := os.ReadFile(options.KubeConfig)
 		if err != nil {
 			return nil, err
 		}
-		r.KubeConfig = restConfig.String()
+		r.KubeConfig = string(file)
 	}
 	r.GatewayNames = strings.Split(options.GatewayNames, ",")
 	r.NeedBackup = options.NeedBackup

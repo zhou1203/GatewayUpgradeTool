@@ -29,13 +29,18 @@ type GatewayTemplate struct {
 }
 
 type Controller struct {
-	Image               Image             `yaml:"image"`
-	ReplicaCount        int               `yaml:"replicaCount,omitempty"`
-	Annotations         map[string]string `yaml:"annotations,omitempty"`
-	Config              map[string]string `yaml:"config,omitempty"`
-	Service             Service           `yaml:"service,omitempty"`
-	Resources           Resource          `yaml:"resources,omitempty"`
-	IntegrateKubeSphere Integrate         `yaml:"integrateKubeSphere,omitempty"`
+	Image                Image                `yaml:"image"`
+	IngressClassResource IngressClassResource `yaml:"ingressClassResource"`
+	ReplicaCount         int                  `yaml:"replicaCount,omitempty"`
+	Annotations          map[string]string    `yaml:"annotations,omitempty"`
+	Config               map[string]string    `yaml:"config,omitempty"`
+	Service              Service              `yaml:"service,omitempty"`
+	Resources            Resource             `yaml:"resources,omitempty"`
+	IntegrateKubeSphere  Integrate            `yaml:"integrateKubeSphere,omitempty"`
+}
+
+type IngressClassResource struct {
+	Name string `yaml:"name"`
 }
 
 type Integrate struct {
