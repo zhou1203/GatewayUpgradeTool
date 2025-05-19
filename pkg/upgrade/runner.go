@@ -2,6 +2,8 @@ package upgrade
 
 import (
 	"context"
+	"dario.cat/mergo"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -215,9 +217,14 @@ func (r *Runner) upgrade(ctx context.Context, old gatewayv2alpha1.Gateway) error
 		return nil
 	}
 
+	values, err := r.valueOverride(ctx, jsonBytes)
+	if err != nil {
+		return err
+	}
+
 	deepCopy := old.DeepCopy()
 	deepCopy.Spec.AppVersion = TargetVersion
-	deepCopy.Spec.Values = runtime.RawExtension{Raw: jsonBytes}
+	deepCopy.Spec.Values = runtime.RawExtension{Raw: values}
 
 	ingressClassList := &v1.IngressClassList{}
 	err = r.Client.List(ctx, ingressClassList, client.MatchingLabels{"app.kubernetes.io/instance": old.Name})
@@ -245,6 +252,45 @@ func (r *Runner) upgrade(ctx context.Context, old gatewayv2alpha1.Gateway) error
 	klog.Infof("Update gateway CR successfully, gateway: %s/%s", old.Namespace, old.Name)
 
 	return nil
+}
+
+func (r *Runner) valueOverride(ctx context.Context, values []byte) ([]byte, error) {
+	valuesMap := map[string]interface{}{}
+	err := json.Unmarshal(values, &valuesMap)
+	if err != nil {
+		return nil, err
+	}
+
+	gatewayCm := &corev1.ConfigMap{}
+	err = r.Client.Get(ctx, types.NamespacedName{Namespace: "extension-gateway", Name: "gateway-agent-backend-config"}, gatewayCm)
+	if err != nil {
+		return nil, err
+	}
+
+	overrideOptions := &gatewayOptions{}
+	config := gatewayCm.Data["config.yaml"]
+	err = yaml.Unmarshal([]byte(config), overrideOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	err = mergo.Map(&valuesMap, overrideOptions.Gateway.ValuesOverride, mergo.WithOverride)
+	if err != nil {
+		return nil, err
+	}
+	marshal, err := json.Marshal(valuesMap)
+	if err != nil {
+		return nil, err
+	}
+	return marshal, nil
+}
+
+type gateway struct {
+	Namespace      string                 `yaml:"namespace"`
+	ValuesOverride map[string]interface{} `yaml:"valuesOverride"`
+}
+type gatewayOptions struct {
+	Gateway gateway `yaml:"gateway"`
 }
 
 func buildClient(kubeconfig string) (client.Client, error) {

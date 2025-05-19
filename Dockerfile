@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # 第一阶段：构建 Go 应用
 FROM golang:1.24 AS builder
 
@@ -12,7 +13,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o gateway-upgrade-tool ./cmd
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -o gateway-upgrade-tool ./cmd
 
 FROM alpine:3.19
 
