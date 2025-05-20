@@ -8,6 +8,7 @@ on:
 env:
   IMAGE_REGISTRY: docker.io
   IMAGE_NAMESPACE: wenhaozhou
+  PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   build:
@@ -28,4 +29,4 @@ jobs:
       if: github.event_name == 'push'
       run: |
         echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin ${{ env.IMAGE_REGISTRY }}
-        REPO=${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAMESPACE }} TAG="${GITHUB_REF#refs/*/}" docker buildx build -f DOCKERFILE -t ${REPO}:${TAG} --push .
+        REPO=${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAMESPACE }} TAG="${GITHUB_REF#refs/*/}" docker buildx build --platform ${PLATFORMS} -t ${REPO}:${TAG} --push .
