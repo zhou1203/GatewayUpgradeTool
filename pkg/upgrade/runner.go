@@ -32,6 +32,9 @@ import (
 
 const (
 	TargetVersion = "kubesphere-nginx-ingress-4.12.1"
+
+	ExtensionNamespace   = "extension-gateway"
+	GatewayConfigMapName = "gateway-agent-backend-config"
 )
 
 type Runner struct {
@@ -262,12 +265,12 @@ func (r *Runner) valueOverride(ctx context.Context, values []byte) ([]byte, erro
 	}
 
 	gatewayCm := &corev1.ConfigMap{}
-	err = r.Client.Get(ctx, types.NamespacedName{Namespace: "extension-gateway", Name: "gateway-agent-backend-config"}, gatewayCm)
+	err = r.Client.Get(ctx, types.NamespacedName{Namespace: ExtensionNamespace, Name: GatewayConfigMapName}, gatewayCm)
 	if err != nil {
 		return nil, err
 	}
 
-	overrideOptions := &gatewayOptions{}
+	overrideOptions := &GatewayConfig{}
 	config := gatewayCm.Data["config.yaml"]
 	err = yaml.Unmarshal([]byte(config), overrideOptions)
 	if err != nil {
@@ -285,12 +288,12 @@ func (r *Runner) valueOverride(ctx context.Context, values []byte) ([]byte, erro
 	return marshal, nil
 }
 
-type gateway struct {
+type OverrideOptions struct {
 	Namespace      string                 `yaml:"namespace"`
 	ValuesOverride map[string]interface{} `yaml:"valuesOverride"`
 }
-type gatewayOptions struct {
-	Gateway gateway `yaml:"gateway"`
+type GatewayConfig struct {
+	Gateway OverrideOptions `yaml:"gateway"`
 }
 
 func buildClient(kubeconfig string) (client.Client, error) {
