@@ -5,11 +5,12 @@ import (
 )
 
 type RunOptions struct {
-	options.Options
+	*options.Options
 	SpecificAppVersion string
-	NeedBackup         bool
 }
 
 func NewRunOptions() *RunOptions {
-	return &RunOptions{}
+	return &RunOptions{
+		Options: options.NewOptions(),
+	}
 }

@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
-	gatewayv2alpha1 "github.com/zhou1203/GatewayUpgradeTool/api/gateway/v2alpha1"
+	gatewayv2alpha2 "github.com/zhou1203/GatewayUpgradeTool/api/gateway/v2alpha2"
 )
 
 const (
@@ -73,7 +73,7 @@ type NodePorts struct {
 	Https string `yaml:"https,omitempty"`
 }
 
-func HandleTemplate(gw *gatewayv2alpha1.Gateway) ([]byte, error) {
+func HandleTemplate(gw *gatewayv2alpha2.Gateway) ([]byte, error) {
 	tmplName := "values.yaml"
 
 	gatewaySpec, err := fromGatewayValues(gw.Spec.Values.Raw)

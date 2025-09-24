@@ -33,6 +33,6 @@ func init() {
 	Cmd.Flags().StringVar(&opts.KubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file ")
 	Cmd.Flags().StringVar(&opts.GatewayNames, "gateways", "", "Comma-separated list of gateway names to upgrade")
 	Cmd.Flags().StringVar(&opts.SpecificAppVersion, "specific-app-version", "", "App version")
-	Cmd.Flags().BoolVar(&opts.NeedBackup, "need-backup", false, "Need backup")
-	Cmd.Flags().StringVar(&opts.BackupDir, "backup-dir", "/mnt/backup", "Backup directory")
+	Cmd.Flags().BoolVar(&opts.Backup.Enabled, "backup-enabled", false, "Need backup")
+	Cmd.Flags().StringVar(&opts.Backup.Dir, "backup-dir", "/mnt/backup", "Backup directory")
 }

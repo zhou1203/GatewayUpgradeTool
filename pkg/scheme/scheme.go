@@ -1,7 +1,7 @@
 package scheme
 
 import (
-	gatewayv2alpha1 "github.com/zhou1203/GatewayUpgradeTool/api/gateway/v2alpha1"
+	gatewayv2alpha2 "github.com/zhou1203/GatewayUpgradeTool/api/gateway/v2alpha2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -16,6 +16,5 @@ func init() {
 	metav1.AddToGroupVersion(Scheme, metav1.SchemeGroupVersion)
 
 	_ = clientgoscheme.AddToScheme(Scheme)
-
-	utilruntime.Must(gatewayv2alpha1.AddToScheme(Scheme))
+	utilruntime.Must(gatewayv2alpha2.AddToScheme(Scheme))
 }
