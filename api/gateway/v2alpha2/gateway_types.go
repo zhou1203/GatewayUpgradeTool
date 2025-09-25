@@ -29,6 +29,8 @@ const (
 	ConditionTypeDeployd         = "Deployed"
 	ConditionTypeDeploymentReady = "DeploymentReady"
 	StatusTrue                   = "True"
+
+	LabelUpgradePlanName = "gateway.kubesphere.io/upgradeplan-name"
 )
 
 type ReplicaRange struct {
@@ -171,7 +173,11 @@ func (in *GatewayReference) FromString(name string) {
 }
 
 func (in *GatewayReference) ToNamespacedName() types.NamespacedName {
-	return types.NamespacedName{Namespace: in.Namespace, Name: in.Name}
+	namespace := in.Namespace
+	if namespace == "" {
+		namespace = KubeSphereControlsSystemNamespace
+	}
+	return types.NamespacedName{Namespace: namespace, Name: in.Name}
 }
 
 type UpgradePlanSpec struct {
