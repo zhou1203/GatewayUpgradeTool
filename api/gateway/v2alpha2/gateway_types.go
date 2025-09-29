@@ -31,7 +31,16 @@ const (
 	StatusTrue                   = "True"
 
 	LabelUpgradePlanName = "gateway.kubesphere.io/upgradeplan-name"
+
+	AnnotationsUpgradeStatus               = "gateway.kubesphere.io/upgrade-status"
+	UpgradeStatusOutOfData   UpgradeStatus = "OutOfData"
+	UpgradeStatusUpgrading   UpgradeStatus = "Upgrading"
+	UpgradeStatusFailed      UpgradeStatus = "Failed"
+	UpgradeStatusSuccess     UpgradeStatus = "Success"
+	UpgradeStatusUpToData    UpgradeStatus = "UpToData"
 )
+
+type UpgradeStatus string
 
 type ReplicaRange struct {
 	// +optional
@@ -155,7 +164,14 @@ func (in *GatewayReference) ToString() string {
 	if namespace == "" {
 		namespace = KubeSphereControlsSystemNamespace
 	}
-	return fmt.Sprintf("%s/%s", namespace, in.Name)
+	return fmt.Sprintf("%s/%s", in.Name, namespace)
+}
+
+func (in *GatewayReference) ToParameter() string {
+	if in.Namespace == "" {
+		return in.Name
+	}
+	return fmt.Sprintf("%s/%s", in.Name, in.Namespace)
 }
 
 func (in *GatewayReference) FromString(name string) {

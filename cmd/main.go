@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 	"github.com/zhou1203/GatewayUpgradeTool/cmd/rollback"
 	"github.com/zhou1203/GatewayUpgradeTool/cmd/upgrade"
-	"os"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gateway-tool",
+	Use:   "gateway-upgrade-tool",
 	Short: "Gateway upgrade tool for managing gateway versions",
 	Long:  `A CLI tool to upgrade or rollback gateway components.`,
 }
